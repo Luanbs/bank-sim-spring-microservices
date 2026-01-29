@@ -1,0 +1,21 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  cloud:
+    gateway:
+      routes:
+        - id: auth
+          uri: http://auth-service:8080
+          predicates:
+            - Path=/auth/**
+          filters:
+            - StripPrefix=1
+
+        - id: account
+          uri: http://account-service:8080
+          predicates:
+            - Path=/account/**
+          filters:
+            - StripPrefix=1

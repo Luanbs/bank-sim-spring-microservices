@@ -1,0 +1,110 @@
+name: banksim
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: banksim-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: banksim
+      RABBITMQ_DEFAULT_PASS: banksim
+    networks:
+      - banksim-net
+
+  postgres-auth:
+    image: postgres:16
+    container_name: banksim-postgres-auth
+    environment:
+      POSTGRES_DB: banksim_auth
+      POSTGRES_USER: banksim
+      POSTGRES_PASSWORD: banksim
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-auth:/var/lib/postgresql/data
+    networks:
+      - banksim-net
+
+  postgres-account:
+    image: postgres:16
+    container_name: banksim-postgres-account
+    environment:
+      POSTGRES_DB: banksim_account
+      POSTGRES_USER: banksim
+      POSTGRES_PASSWORD: banksim
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata-account:/var/lib/postgresql/data
+    networks:
+      - banksim-net
+
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: banksim-auth-service
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres-auth
+      DB_PORT: 5432
+      DB_NAME: banksim_auth
+      DB_USER: banksim
+      DB_PASSWORD: banksim
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: banksim
+      RABBIT_PASSWORD: banksim
+    depends_on:
+      - postgres-auth
+      - rabbitmq
+    networks:
+      - banksim-net
+
+  account-service:
+    build:
+      context: ./account-service
+    container_name: banksim-account-service
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres-account
+      DB_PORT: 5432
+      DB_NAME: banksim_account
+      DB_USER: banksim
+      DB_PASSWORD: banksim
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: banksim
+      RABBIT_PASSWORD: banksim
+    depends_on:
+      - postgres-account
+      - rabbitmq
+    networks:
+      - banksim-net
+
+  gateway:
+    build:
+      context: ./gateway
+    container_name: banksim-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      - auth-service
+      - account-service
+    networks:
+      - banksim-net
+
+networks:
+  banksim-net:
+    driver: bridge
+
+volumes:
+  pgdata-auth:
+  pgdata-account:
