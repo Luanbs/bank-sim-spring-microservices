@@ -1,0 +1,80 @@
+services:
+  auth-service:
+    image: maven:3.9-eclipse-temurin-25
+    build: !reset
+    working_dir: /app
+    container_name: banksim-auth-service
+    volumes:
+      - .:/app
+      - ~/.m2:/root/.m2
+      - ./secrets/auth:/run/secrets/auth:ro
+    command: mvn -f auth-service/pom.xml spring-boot:run -Dspring-boot.run.jvmArguments=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005
+    ports:
+      - "8081:8080"
+      - "5005:5005"
+    entrypoint: []
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres-auth
+      DB_PORT: 5432
+      DB_NAME: banksim_auth
+      DB_USER: banksim
+      DB_PASSWORD: banksim
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: banksim
+      RABBIT_PASSWORD: banksim
+      JAVA_TOOL_OPTIONS: >
+        --enable-native-access=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -Dio.netty.tryReflectionSetAccessible=true
+
+  account-service:
+    image: maven:3.9-eclipse-temurin-25
+    build: !reset
+    working_dir: /app
+    container_name: banksim-account-service
+    volumes:
+      - .:/app
+      - ~/.m2:/root/.m2
+    command: mvn -f account-service/pom.xml spring-boot:run -Dspring-boot.run.jvmArguments=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5006
+    ports:
+      - "8082:8080"
+      - "5006:5006" # Alterado para 5006 interno para evitar conflito
+    entrypoint: []
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres-account
+      DB_PORT: 5432
+      DB_NAME: banksim_account
+      DB_USER: banksim
+      DB_PASSWORD: banksim
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: banksim
+      RABBIT_PASSWORD: banksim
+      INTERNAL_API_KEY: banksim-internal-key
+      JAVA_TOOL_OPTIONS: >
+        --enable-native-access=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -Dio.netty.tryReflectionSetAccessible=true
+
+  gateway:
+    image: maven:3.9-eclipse-temurin-25
+    build: !reset
+    working_dir: /app
+    container_name: banksim-gateway
+    volumes:
+      - .:/app
+      - ~/.m2:/root/.m2
+    command: mvn -f gateway/pom.xml spring-boot:run -Dspring-boot.run.jvmArguments=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5007
+    ports:
+      - "8080:8080"
+      - "5007:5007" 
+    entrypoint: []
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_TOOL_OPTIONS: >
+        --enable-native-access=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -Dio.netty.tryReflectionSetAccessible=true

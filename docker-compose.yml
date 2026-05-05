@@ -1,8 +1,16 @@
 name: banksim
 
 services:
+  redis:
+    image: redis:8.0.2-alpine
+    container_name: banksim-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - banksim-net
+
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:4.2.3-management
     container_name: banksim-rabbitmq
     ports:
       - "5672:5672"
@@ -43,7 +51,8 @@ services:
 
   auth-service:
     build:
-      context: ./auth-service
+      context: .
+      dockerfile: auth-service/Dockerfile
     container_name: banksim-auth-service
     ports:
       - "8081:8080"
@@ -58,15 +67,23 @@ services:
       RABBIT_PORT: 5672
       RABBIT_USER: banksim
       RABBIT_PASSWORD: banksim
+      JAVA_TOOL_OPTIONS: >
+        --enable-native-access=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -Dio.netty.tryReflectionSetAccessible=true
     depends_on:
       - postgres-auth
       - rabbitmq
+      - redis
     networks:
       - banksim-net
+    volumes:
+      - ./secrets/auth:/run/secrets/auth:ro
 
   account-service:
     build:
-      context: ./account-service
+      context: .
+      dockerfile: account-service/Dockerfile
     container_name: banksim-account-service
     ports:
       - "8082:8080"
@@ -81,26 +98,52 @@ services:
       RABBIT_PORT: 5672
       RABBIT_USER: banksim
       RABBIT_PASSWORD: banksim
+      INTERNAL_API_KEY: banksim-internal-key
+      JAVA_TOOL_OPTIONS: >
+        --enable-native-access=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -Dio.netty.tryReflectionSetAccessible=true
     depends_on:
       - postgres-account
       - rabbitmq
+      - redis
     networks:
       - banksim-net
 
   gateway:
     build:
-      context: ./gateway
+      context: .
+      dockerfile: gateway/Dockerfile
     container_name: banksim-gateway
     ports:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      JAVA_TOOL_OPTIONS: >
+        --enable-native-access=ALL-UNNAMED
+        --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+        -Dio.netty.tryReflectionSetAccessible=true
     depends_on:
       - auth-service
       - account-service
+      - redis
     networks:
       - banksim-net
-
+      
+  frontend:
+    build:
+      context: ./front-end-react
+      dockerfile: docker/Dockerfile
+      args:
+        VITE_API: http://localhost:8080
+    container_name: banksim-frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    profiles: ["frontend"]
+    
 networks:
   banksim-net:
     driver: bridge
