@@ -1,0 +1,37 @@
+server:
+  port: 8081
+
+security:
+  jwt:
+    issuer: "http://localhost:8081"
+    ttl-seconds: 1800
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:../secrets/auth/private.pem}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:../secrets/auth/public.pem}
+
+spring:
+  profiles:
+    active: dev
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:banksim_auth}
+    username: ${DB_USER:banksim}
+    password: ${DB_PASSWORD:banksim}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:banksim}
+    password: ${RABBIT_PASSWORD:banksim}
+
+account-service:
+  base-url: ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8082}
+  internal-api-key: ${INTERNAL_API_KEY:banksim-internal-key}

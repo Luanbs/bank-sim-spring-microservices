@@ -4,20 +4,35 @@ server:
 spring:
   application:
     name: gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8081}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+  data:
+    redis:
+      host: localhost
+      port: 6379
   cloud:
     gateway:
       server:
         webflux:
           routes:
+            - id: auth-jwks
+              uri: http://localhost:8081
+              predicates:
+                - Path=/.well-known/jwks.json
+
             - id: auth
-              uri: http://auth-service:8080
+              uri: http://localhost:8081
               predicates:
                 - Path=/auth/**
               filters:
                 - StripPrefix=1
 
             - id: account
-              uri: http://account-service:8080
+              uri: http://localhost:8082
               predicates:
                 - Path=/account/**
               filters:
