@@ -1,17 +1,14 @@
-# ===== STAGE 1: build (Java 25) =====
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
 
-COPY pom.xml .
-RUN mvn -q -B -e dependency:go-offline
+COPY . .
 
-COPY src ./src
-RUN mvn -q -B -e package -DskipTests
+RUN mvn -q -B -e -DskipTests package -pl auth-service -am
 
-# ===== STAGE 2: runtime (Java 25) =====
 FROM eclipse-temurin:25-jre
 WORKDIR /app
 
-COPY --from=build /build/target/*.jar app.jar
+COPY --from=build /build/auth-service/target/*.jar app.jar
+
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]
