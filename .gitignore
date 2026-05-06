@@ -24,3 +24,11 @@ hs_err_pid*
 replay_pid*
 
 secrets/**/*.pem
+
+#IDEA
+out/
+.idea/
+.idea_modules/
+*.iml
+*.ipr
+*.iws
