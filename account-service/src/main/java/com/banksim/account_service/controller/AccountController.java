@@ -5,8 +5,16 @@ import com.banksim.account_service.dto.request.TransferRequest;
 import com.banksim.account_service.dto.response.AccountResponse;
 import com.banksim.account_service.dto.response.ContactResponse;
 import com.banksim.account_service.dto.response.TransferResponse;
+import com.banksim.account_service.dto.response.dashboard.AccountDashboardResponse;
+import com.banksim.account_service.dto.response.dashboard.CardsResponse;
+import com.banksim.account_service.dto.response.dashboard.RecentTransactionsResponse;
+import com.banksim.account_service.dto.response.dashboard.SavingsGoalsResponse;
+import com.banksim.account_service.dto.response.dashboard.SpendingOverviewResponse;
+import com.banksim.account_service.dto.response.dashboard.UpcomingBillsResponse;
 import com.banksim.account_service.service.AccountService;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,9 +52,46 @@ public class AccountController {
 
     @PreAuthorize("hasRole('USER')")
     @GetMapping("/me")
-    public ResponseEntity<AccountResponse> getById(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<AccountDashboardResponse> getById(@AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return ResponseEntity.ok(accountService.getAccountFromUserId(userId));
+        return ResponseEntity.ok(accountService.getDashboard(userId));
+    }
+
+    @PreAuthorize("hasRole('USER')")
+    @GetMapping("/spending-overview")
+    public ResponseEntity<SpendingOverviewResponse> getSpendingOverview(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(accountService.getSpendingOverview(userId));
+    }
+
+    @PreAuthorize("hasRole('USER')")
+    @GetMapping("/transactions/recent")
+    public ResponseEntity<RecentTransactionsResponse> getRecentTransactions(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "5") @Min(1) @Max(50) int limit) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(accountService.getRecentTransactions(userId, limit));
+    }
+
+    @PreAuthorize("hasRole('USER')")
+    @GetMapping("/bills/upcoming")
+    public ResponseEntity<UpcomingBillsResponse> getUpcomingBills(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(accountService.getUpcomingBills(userId));
+    }
+
+    @PreAuthorize("hasRole('USER')")
+    @GetMapping("/cards")
+    public ResponseEntity<CardsResponse> getCards(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(accountService.getCards(userId));
+    }
+
+    @PreAuthorize("hasRole('USER')")
+    @GetMapping("/savings-goals")
+    public ResponseEntity<SavingsGoalsResponse> getSavingsGoals(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(accountService.getSavingsGoals(userId));
     }
 
     @PreAuthorize("hasRole('USER')")

@@ -6,17 +6,42 @@ import com.banksim.account_service.dto.request.UpdateAccountRequest;
 import com.banksim.account_service.dto.response.AccountResponse;
 import com.banksim.account_service.dto.response.ContactResponse;
 import com.banksim.account_service.dto.response.TransferResponse;
+import com.banksim.account_service.dto.response.dashboard.AccountDashboardResponse;
+import com.banksim.account_service.dto.response.dashboard.CardItemResponse;
+import com.banksim.account_service.dto.response.dashboard.CardsResponse;
+import com.banksim.account_service.dto.response.dashboard.RecentTransactionsResponse;
+import com.banksim.account_service.dto.response.dashboard.SavingsGoalItemResponse;
+import com.banksim.account_service.dto.response.dashboard.SavingsGoalsResponse;
+import com.banksim.account_service.dto.response.dashboard.SpendingOverviewItemResponse;
+import com.banksim.account_service.dto.response.dashboard.SpendingOverviewResponse;
+import com.banksim.account_service.dto.response.dashboard.TransactionItemResponse;
+import com.banksim.account_service.dto.response.dashboard.UpcomingBillItemResponse;
+import com.banksim.account_service.dto.response.dashboard.UpcomingBillsResponse;
 import com.banksim.account_service.entity.Account;
+import com.banksim.account_service.entity.AccountBill;
+import com.banksim.account_service.entity.AccountCard;
+import com.banksim.account_service.entity.AccountHistory;
+import com.banksim.account_service.entity.AccountHistoryEntryType;
+import com.banksim.account_service.entity.AccountHistoryFlowType;
 import com.banksim.account_service.entity.AccountTransfer;
+import com.banksim.account_service.entity.SavingsGoal;
+import com.banksim.account_service.repository.AccountBillRepository;
+import com.banksim.account_service.repository.AccountCardRepository;
+import com.banksim.account_service.repository.AccountHistoryRepository;
 import com.banksim.account_service.repository.AccountRepository;
 import com.banksim.account_service.repository.AccountTransferRepository;
+import com.banksim.account_service.repository.DailySpendingView;
+import com.banksim.account_service.repository.SavingsGoalRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -24,12 +49,27 @@ import java.util.UUID;
 @Service
 public class AccountService {
 
+    private static final DateTimeFormatter SPENDING_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM dd", Locale.US);
+
     private final AccountRepository accountRepository;
     private final AccountTransferRepository accountTransferRepository;
+    private final AccountHistoryRepository accountHistoryRepository;
+    private final AccountBillRepository accountBillRepository;
+    private final AccountCardRepository accountCardRepository;
+    private final SavingsGoalRepository savingsGoalRepository;
 
-    public AccountService(AccountRepository accountRepository, AccountTransferRepository accountTransferRepository) {
+    public AccountService(AccountRepository accountRepository,
+                          AccountTransferRepository accountTransferRepository,
+                          AccountHistoryRepository accountHistoryRepository,
+                          AccountBillRepository accountBillRepository,
+                          AccountCardRepository accountCardRepository,
+                          SavingsGoalRepository savingsGoalRepository) {
         this.accountRepository = accountRepository;
         this.accountTransferRepository = accountTransferRepository;
+        this.accountHistoryRepository = accountHistoryRepository;
+        this.accountBillRepository = accountBillRepository;
+        this.accountCardRepository = accountCardRepository;
+        this.savingsGoalRepository = savingsGoalRepository;
     }
 
     @Transactional
@@ -51,6 +91,17 @@ public class AccountService {
         newAccount.setBalance(BigDecimal.valueOf(100.00));
 
         accountRepository.save(newAccount);
+        recordHistory(
+                newAccount,
+                AccountHistoryEntryType.INITIAL_BALANCE,
+                AccountHistoryFlowType.INCOME,
+                "Initial balance",
+                "Account",
+                newAccount.getBalance(),
+                Instant.now(),
+                null,
+                null
+        );
 
         return toResponse(newAccount);
     }
@@ -116,6 +167,28 @@ public class AccountService {
         transfer.setTransferredAt(Instant.now());
 
         accountTransferRepository.save(transfer);
+        recordHistory(
+                lockedSender,
+                AccountHistoryEntryType.TRANSFER_OUT,
+                AccountHistoryFlowType.EXPENSE,
+                "Transfer to " + lockedRecipient.getOwnerName(),
+                "Transfer",
+                request.amount(),
+                transfer.getTransferredAt(),
+                "ACCOUNT_TRANSFER",
+                transfer.getId()
+        );
+        recordHistory(
+                lockedRecipient,
+                AccountHistoryEntryType.TRANSFER_IN,
+                AccountHistoryFlowType.INCOME,
+                "Transfer from " + lockedSender.getOwnerName(),
+                "Transfer",
+                request.amount(),
+                transfer.getTransferredAt(),
+                "ACCOUNT_TRANSFER",
+                transfer.getId()
+        );
 
         return new TransferResponse(
                 transfer.getId(),
@@ -140,6 +213,17 @@ public class AccountService {
         var account = findAccountByUserId(id);
         account.setBalance(account.getBalance().add(request.amount()));
         accountRepository.save(account);
+        recordHistory(
+                account,
+                AccountHistoryEntryType.DEPOSIT,
+                AccountHistoryFlowType.INCOME,
+                "Deposit",
+                "Deposit",
+                request.amount(),
+                Instant.now(),
+                null,
+                null
+        );
         return toResponse(account);
     }
 
@@ -152,7 +236,70 @@ public class AccountService {
         }
         account.setBalance(newBalance);
         accountRepository.save(account);
+        recordHistory(
+                account,
+                AccountHistoryEntryType.WITHDRAWAL,
+                AccountHistoryFlowType.EXPENSE,
+                "Withdrawal",
+                "Withdrawal",
+                request.amount(),
+                Instant.now(),
+                null,
+                null
+        );
         return toResponse(account);
+    }
+
+    @Transactional(readOnly = true)
+    public SpendingOverviewResponse getSpendingOverview(UUID userId) {
+        Account account = findAccountByUserId(userId);
+        return buildSpendingOverviewResponse(account);
+    }
+
+    @Transactional(readOnly = true)
+    public RecentTransactionsResponse getRecentTransactions(UUID userId, int limit) {
+        Account account = findAccountByUserId(userId);
+        return buildRecentTransactionsResponse(account, limit);
+    }
+
+    @Transactional(readOnly = true)
+    public UpcomingBillsResponse getUpcomingBills(UUID userId) {
+        Account account = findAccountByUserId(userId);
+        return buildUpcomingBillsResponse(account);
+    }
+
+    @Transactional(readOnly = true)
+    public CardsResponse getCards(UUID userId) {
+        Account account = findAccountByUserId(userId);
+        return buildCardsResponse(account);
+    }
+
+    @Transactional(readOnly = true)
+    public SavingsGoalsResponse getSavingsGoals(UUID userId) {
+        Account account = findAccountByUserId(userId);
+        return buildSavingsGoalsResponse(account);
+    }
+
+    @Transactional(readOnly = true)
+    public AccountDashboardResponse getDashboard(UUID userId) {
+        Account account = findAccountByUserId(userId);
+        SpendingOverviewResponse spendingOverview = buildSpendingOverviewResponse(account);
+        RecentTransactionsResponse recentTransactions = buildRecentTransactionsResponse(account, 5);
+        UpcomingBillsResponse upcomingBills = buildUpcomingBillsResponse(account);
+        CardsResponse cards = buildCardsResponse(account);
+        SavingsGoalsResponse savingsGoals = buildSavingsGoalsResponse(account);
+
+        return new AccountDashboardResponse(
+                account.getId(),
+                account.getUserId(),
+                account.getOwnerName(),
+                account.getBalance(),
+                spendingOverview.data(),
+                recentTransactions.transactions(),
+                upcomingBills.bills(),
+                cards.cards(),
+                savingsGoals.goals()
+        );
     }
 
     private Account findAccountByUserId(UUID id) {
@@ -176,6 +323,120 @@ public class AccountService {
                 account.getOwnerName(),
                 account.getBalance(),
                 account.getCreatedAt());
+    }
+
+    private SpendingOverviewResponse buildSpendingOverviewResponse(Account account) {
+        List<SpendingOverviewItemResponse> data = accountHistoryRepository.findDailySpendingOverview(account.getId())
+                .stream()
+                .map(this::toSpendingOverviewItem)
+                .toList();
+        return new SpendingOverviewResponse(data);
+    }
+
+    private RecentTransactionsResponse buildRecentTransactionsResponse(Account account, int limit) {
+        int normalizedLimit = Math.max(1, limit);
+        List<TransactionItemResponse> transactions = accountHistoryRepository
+                .findByAccountIdOrderByOccurredAtDesc(account.getId(), PageRequest.of(0, normalizedLimit))
+                .stream()
+                .map(this::toTransactionItem)
+                .toList();
+        return new RecentTransactionsResponse(transactions);
+    }
+
+    private UpcomingBillsResponse buildUpcomingBillsResponse(Account account) {
+        List<UpcomingBillItemResponse> bills = accountBillRepository
+                .findByAccountIdAndDueDateGreaterThanEqualOrderByDueDateAsc(account.getId(), LocalDate.now())
+                .stream()
+                .map(this::toUpcomingBillItem)
+                .toList();
+        return new UpcomingBillsResponse(bills);
+    }
+
+    private CardsResponse buildCardsResponse(Account account) {
+        List<CardItemResponse> cards = accountCardRepository.findByAccountIdOrderByBrandAsc(account.getId())
+                .stream()
+                .map(this::toCardItem)
+                .toList();
+        return new CardsResponse(cards);
+    }
+
+    private SavingsGoalsResponse buildSavingsGoalsResponse(Account account) {
+        List<SavingsGoalItemResponse> goals = savingsGoalRepository.findByAccountIdOrderByNameAsc(account.getId())
+                .stream()
+                .map(this::toSavingsGoalItem)
+                .toList();
+        return new SavingsGoalsResponse(goals);
+    }
+
+    private SpendingOverviewItemResponse toSpendingOverviewItem(DailySpendingView spendingView) {
+        return new SpendingOverviewItemResponse(
+                spendingView.getDate().format(SPENDING_LABEL_FORMATTER),
+                spendingView.getSpent(),
+                spendingView.getDate()
+        );
+    }
+
+    private TransactionItemResponse toTransactionItem(AccountHistory history) {
+        String type = history.getFlowType() == AccountHistoryFlowType.INCOME ? "income" : "expense";
+        return new TransactionItemResponse(
+                history.getId(),
+                history.getTitle(),
+                history.getCategory(),
+                history.getAmount(),
+                history.getOccurredAt(),
+                type
+        );
+    }
+
+    private UpcomingBillItemResponse toUpcomingBillItem(AccountBill bill) {
+        return new UpcomingBillItemResponse(
+                bill.getId(),
+                bill.getName(),
+                bill.getCategory(),
+                bill.getAmount(),
+                bill.getDueDate()
+        );
+    }
+
+    private CardItemResponse toCardItem(AccountCard card) {
+        return new CardItemResponse(
+                card.getId(),
+                card.getType(),
+                card.getLast4(),
+                card.getExpiry(),
+                card.getBrand()
+        );
+    }
+
+    private SavingsGoalItemResponse toSavingsGoalItem(SavingsGoal goal) {
+        return new SavingsGoalItemResponse(
+                goal.getId(),
+                goal.getName(),
+                goal.getCurrentAmount(),
+                goal.getTargetAmount()
+        );
+    }
+
+    private void recordHistory(Account account,
+                               AccountHistoryEntryType entryType,
+                               AccountHistoryFlowType flowType,
+                               String title,
+                               String category,
+                               BigDecimal amount,
+                               Instant occurredAt,
+                               String referenceType,
+                               UUID referenceId) {
+        AccountHistory history = new AccountHistory();
+        history.setAccount(account);
+        history.setEntryType(entryType);
+        history.setFlowType(flowType);
+        history.setTitle(title);
+        history.setCategory(category);
+        history.setAmount(amount);
+        history.setOccurredAt(occurredAt);
+        history.setReferenceType(referenceType);
+        history.setReferenceId(referenceId);
+        accountHistoryRepository.save(history);
     }
 
     private String normalizeEmail(String email) {
