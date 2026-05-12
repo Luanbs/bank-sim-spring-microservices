@@ -28,7 +28,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
   const [step, setStep] = useState<Step>('form');
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
 
-  // Form state
+
   const [recentContacts, setRecentContacts] = useState<RecentContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [selectedContactEmail, setSelectedContactEmail] = useState<string | null>(null);
@@ -37,12 +37,12 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
   const [formError, setFormError] = useState<string | null>(null);
   const [sendLoading, setSendLoading] = useState(false);
 
-  // Confirm state
+
   const [recipient, setRecipient] = useState<RecipientAccount | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
-  // Fetch recent contacts when modal opens
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -52,7 +52,6 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
         const response = await api.get('/account/contacts/recent');
         console.log('[SendMoney] Contacts response:', response.data);
         const raw = response.data || [];
-        // Normalize field names — backend may use contactName, name, fullName, etc.
         const normalized = raw.map((c: Record<string, unknown>) => ({
           contactName: (c.contactName || c.name || c.fullName || c.email || '?') as string,
           email: (c.email || '') as string,
@@ -68,7 +67,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
     fetchContacts();
   }, [isOpen]);
 
-  // Reset everything when modal closes
+
   const resetState = useCallback(() => {
     setStep('form');
     setDirection('forward');
@@ -85,7 +84,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
 
   const handleClose = () => {
     onClose();
-    // Delay reset so close animation plays first
+
     setTimeout(resetState, 300);
   };
 
@@ -98,7 +97,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
   const handleEmailChange = (value: string) => {
     setEmail(value);
     setFormError(null);
-    // If the typed value no longer matches the selected contact, deselect
+
     if (selectedContactEmail && value !== selectedContactEmail) {
       setSelectedContactEmail(null);
     }
@@ -121,7 +120,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
       return;
     }
 
-    // Check balance
+
     if (parsedAmount > currentBalance) {
       setFormError(
         `Insufficient balance. Your current balance is ${currentBalance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`
@@ -129,7 +128,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
       return;
     }
 
-    // Look up recipient
+
     setSendLoading(true);
     try {
       const response = await api.get(`/account/${encodeURIComponent(email)}`);
@@ -174,7 +173,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
     setStep('form');
   };
 
-  // Determine modal title and onBack based on step
+
   const modalTitle =
     step === 'form' ? 'Send Money' :
     step === 'confirm' ? 'Confirm Transfer' :
@@ -204,8 +203,22 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
         >
           {step === 'form' && (
             <>
-              {/* Recent Contacts */}
-              {!contactsLoading && recentContacts.length > 0 && (
+
+              {contactsLoading ? (
+                <div className="space-y-3">
+                  <label className="text-sm font-bold text-brand-text-muted uppercase tracking-wider">
+                    Recent Contacts
+                  </label>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex flex-col items-center gap-2 min-w-[72px]">
+                        <div className="w-14 h-14 rounded-2xl skeleton-shimmer" />
+                        <div className="w-10 h-3 rounded skeleton-shimmer" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : recentContacts.length > 0 ? (
                 <div className="space-y-3">
                   <label className="text-sm font-bold text-brand-text-muted uppercase tracking-wider">
                     Recent Contacts
@@ -241,9 +254,9 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                     })}
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              {/* Contact Identification Method */}
+
               <div className="space-y-3">
                 <label className="text-sm font-bold text-brand-text-muted uppercase tracking-wider">
                   Select contact identification
@@ -263,7 +276,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </div>
               </div>
 
-              {/* Email Input */}
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-brand-text-muted uppercase tracking-wider">
                   Recipient Email
@@ -284,7 +297,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 )}
               </div>
 
-              {/* Amount Input */}
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-brand-text-muted uppercase tracking-wider">
                   Amount
@@ -303,7 +316,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </div>
               </div>
 
-              {/* Error Message */}
+
               {formError && (
                 <motion.div
                   initial={{ opacity: 0, y: -8 }}
@@ -315,7 +328,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </motion.div>
               )}
 
-              {/* Send Now Button */}
+
               <button
                 onClick={handleSendNow}
                 disabled={!isEmailValid || !isAmountValid || sendLoading}
@@ -332,7 +345,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
 
           {step === 'confirm' && recipient && (
             <>
-              {/* Recipient Card */}
+
               <div className="bg-brand-bg rounded-3xl p-6 space-y-4 border border-brand-border">
                 <p className="text-xs font-bold text-brand-text-muted uppercase tracking-wider">Sending to</p>
                 <div className="flex items-center gap-4">
@@ -346,7 +359,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </div>
               </div>
 
-              {/* Amount Card */}
+
               <div className="bg-brand-bg rounded-3xl p-6 border border-brand-border">
                 <p className="text-xs font-bold text-brand-text-muted uppercase tracking-wider mb-2">Amount</p>
                 <p className="text-4xl font-bold text-brand-primary">
@@ -354,7 +367,6 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </p>
               </div>
 
-              {/* Error Message */}
               {confirmError && (
                 <motion.div
                   initial={{ opacity: 0, y: -8 }}
@@ -366,7 +378,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </motion.div>
               )}
 
-              {/* Confirm Button */}
+
               <button
                 onClick={handleConfirmAndSend}
                 disabled={confirmLoading}
@@ -383,7 +395,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
 
           {step === 'receipt' && (
             <>
-              {/* Receipt Icon */}
+
               <div className="flex flex-col items-center text-center space-y-4 py-6">
                 <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-full flex items-center justify-center">
                   <FileText size={36} />
@@ -396,7 +408,7 @@ export default function SendMoneyModal({ isOpen, onClose, currentBalance }: Send
                 </div>
               </div>
 
-              {/* Share Receipt Button (disabled) */}
+
               <button
                 disabled
                 className="w-full bg-brand-bg border border-brand-border text-brand-text-muted py-5 rounded-3xl font-bold text-lg opacity-50 cursor-not-allowed flex items-center justify-center gap-3"

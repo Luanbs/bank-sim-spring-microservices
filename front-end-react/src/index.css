@@ -20,6 +20,8 @@
   --brand-card: #FFFFFF;
   --brand-border: #E5E7EB;
   --brand-text-muted: #6B7280;
+  --skeleton-base: #E5E7EB;
+  --skeleton-shine: #F3F4F6;
 }
 
 .dark {
@@ -28,6 +30,35 @@
   --brand-card: #171717;
   --brand-border: #262626;
   --brand-text-muted: #A3A3A3;
+  --skeleton-base: #262626;
+  --skeleton-shine: #3a3a3a;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-shimmer-inverted {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.08) 25%,
+    rgba(255,255,255,0.18) 50%,
+    rgba(255,255,255,0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 @layer base {
